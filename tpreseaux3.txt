@@ -1,0 +1,81 @@
+udpsender :
+import java.io.*;
+import java.net.*;
+
+public class UDPSender {
+    public static void main(String[] args) {
+        try {
+            DatagramSocket socket = new DatagramSocket();
+            InetAddress address = InetAddress.getByName("localhost");
+            int port = 12345;
+            File file = new File("C:/Users/aser/Downloads/Documents/tp3.txt");
+            FileInputStream fileInputStream = new FileInputStream(file);
+            byte[] buffer = new byte[1024];
+            int packetCount = 0;
+            while ((fileInputStream.read(buffer)) != -1) {
+                packetCount++;
+                
+                DatagramPacket packet = new DatagramPacket(buffer, buffer.length, address, port);
+                socket.send(packet);
+            }
+            fileInputStream.close();
+            socket.close();
+            System.out.println("Total files sent: " + packetCount);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+udprecever :
+import java.io.*;
+import java.net.*;
+import java.util.*;
+
+public class UDPReceiver {
+    private static final int PACKET_SIZE = 65507;
+
+    public static void main(String[] args) {
+        try {
+            DatagramSocket socket = new DatagramSocket(12345);
+            byte[] buffer = new byte[PACKET_SIZE];
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+            Map<Integer, byte[]> packetMap = new HashMap<>();
+            int expectedPacketCount = 1;
+            boolean endOfFileReached = false;
+
+            while (!endOfFileReached) {
+                socket.receive(packet);
+                ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(packet.getData());
+                ObjectInputStream objectInputStream = new ObjectInputStream(byteArrayInputStream);
+                int packetNumber = objectInputStream.readInt();
+                byte[] packetData = (byte[]) objectInputStream.readObject();
+
+                if (packetNumber == expectedPacketCount) {
+                    packetMap.put(packetNumber, packetData);
+                    expectedPacketCount++;
+                } else if (packetNumber > expectedPacketCount) {
+                    // missing packets, request re-transmission
+                    System.out.println("Missing packets: " + expectedPacketCount + "-" + (packetNumber - 1));
+                    expectedPacketCount = packetNumber + 1;
+                    DatagramPacket requestPacket = new DatagramPacket(new byte[0], 0, packet.getAddress(), packet.getPort());
+                    socket.send(requestPacket);
+                }
+
+                if (packet.getLength() < PACKET_SIZE) {
+                    endOfFileReached = true;
+                }
+            }
+
+            socket.close();
+            File outputFile = new File("C:/Users/aser/Downloads/Documents/tp3.txt");
+            FileOutputStream fileOutputStream = new FileOutputStream(outputFile);
+            for (int i = 1; i <= packetMap.size(); i++) {
+                byte[] packetData = packetMap.get(i);
+                fileOutputStream.write(packetData);
+            }
+            fileOutputStream.close();
+        } catch (IOException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+}
